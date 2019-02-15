@@ -1,10 +1,13 @@
 import pyaudio, wave
 import keyboard, time
 import numpy as np
-import librosa
+from librosa.core import load
+from librosa.effects import trim
+from librosa.output import write_wav
+
 import sounddevice as sd
 from dtw_recognition import recognition
-
+#from k_dtw_recognition import recognition
 
 class record(recognition):
 
@@ -12,15 +15,18 @@ class record(recognition):
         
         self.top_db = 80
         self.audio_num = audio_num
-        self.WAVE_OUTPUT_FILENAME = str(audio_num)+".wav"
+        self.WAVE_OUTPUT_FILENAME = "./saved/"+str(audio_num)+".wav"
         self.CHUNK = 1024 
         self.FORMAT = pyaudio.paInt16 
         self.CHANNELS = 1
         self.sr = 16000 
+        #self.loadData(k=2, debug = False)
+        self.loadData()
         
     def _init_record(self):                
         #dtw recognition
-        self.loadData()
+        
+        
         self.p = pyaudio.PyAudio() 
 
         self.stream = self.p.open(format=self.FORMAT, 
@@ -28,7 +34,8 @@ class record(recognition):
                rate=self.sr, 
                input=True, 
                frames_per_buffer=self.CHUNK) 
-
+     
+        
     def _recording(self):
         print("say anything! "*3)
         self.frames = []
@@ -56,23 +63,23 @@ class record(recognition):
        
 
     def play(self):
-        wav, sr = librosa.core.load(self.WAVE_OUTPUT_FILENAME,sr=self.sr)
+        wav, sr = load(self.WAVE_OUTPUT_FILENAME,sr=self.sr)
         sd.play(wav,sr)
         
      
     def guess(self):
-        wav, _ = librosa.core.load(self.WAVE_OUTPUT_FILENAME,sr=self.sr)
-        wav, _ = librosa.effects.trim(wav, top_db=self.top_db)
-        librosa.output.write_wav(self.WAVE_OUTPUT_FILENAME, wav, self.sr)
+        wav, _ = load(self.WAVE_OUTPUT_FILENAME,sr=self.sr)
+        wav, _ = trim(wav, top_db=self.top_db)
+        write_wav(self.WAVE_OUTPUT_FILENAME, wav, self.sr)
         print(">> save as", self.WAVE_OUTPUT_FILENAME)
 
         #dtw recognition
         x = self.getMfcc(wav,self.sr)
         res = self.recognition(x)
-        
+        print(res)
             
         self.audio_num = self.audio_num +1
-        self.WAVE_OUTPUT_FILENAME = str(self.audio_num)+".wav"
+        self.WAVE_OUTPUT_FILENAME = "./saved/"+str(self.audio_num)+".wav"
 
 
     def run(self):
@@ -84,6 +91,7 @@ class record(recognition):
         
         try:
             while True:
+                time.sleep(0.1)
                 if keyboard.is_pressed('q'):
                     time.sleep(0.2)
                     self._init_record()
@@ -100,7 +108,7 @@ class record(recognition):
                 
         except KeyboardInterrupt:
             self.run()
-            
+
 if __name__ == '__main__':
     r1 = record()
     r1.run()
