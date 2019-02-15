@@ -1,11 +1,10 @@
-#-*- coding: utf-8 -*-
+
 import librosa
 import librosa.display
 import numpy as np
 from dtw import dtw, show
 from os.path import exists
 from glob import glob
-from platform import system as sys_chk
 
 class recognition(object):
     #file_path = None   # string, path of input files
@@ -35,8 +34,10 @@ class recognition(object):
                 print(file,"is processed")
         if not exists(self.file_path+'0.npy'):
             wav1, sr = librosa.core.load(self.file_path+'0.wav')
-            x = self._getMfcc(wav1,sr)            
+            x = self.getMfcc(wav1,sr)            
             np.save(self.file_path+'0.npy',x)
+        else:
+            x = np.load(self.file_path+'0.npy')
             
         i = 1
         
@@ -49,9 +50,8 @@ class recognition(object):
                 continue
         
             wav2, sr = librosa.core.load(self.file_path+str(i)+'.wav')
-            y = self._getMfcc(wav2,sr)
-            if x is None:
-                x = np.load(self.file_path+'0.npy')
+            y = self.getMfcc(wav2,sr)
+            
                 
             d, _, _, path = dtw(x, y, dist=lambda x, y: np.linalg.norm(x - y, ord=1))            
             yp = self._process(x,y,path)
@@ -60,7 +60,7 @@ class recognition(object):
             i = i+1
         # save number of files
         self.n = i
-
+        
     def _init_k_means(self):
         
         visit = np.zeros(self.n,dtype = np.bool)
@@ -98,15 +98,16 @@ class recognition(object):
             
             j = jmin
             if self.debug:
-                f = open(self.file_path + self.tag_name, 'r')
+                
+                f = open(self.file_path + self.tag_name, 'r',encoding="utf-8")
                 label = f.readline()
                 print(label,":",j,"is selected")
             mfccs[j] = mfccs[j]*n_mfccs[j]/(n_mfccs[j] + 1) + mfcc/(n_mfccs[j] + 1)
             n_mfccs[j] = n_mfccs[j] + 1 
 
        
-        f = open(self.file_path + self.tag_name, 'r')
-        label = f.readline()
+        f = open(self.file_path + self.tag_name, 'r',encoding="utf-8")
+        label = f.readline().replace('\n','')
         
         for i in range(len(mfccs)):
             self.mfccs[self._idx] = mfccs[i]
@@ -115,14 +116,8 @@ class recognition(object):
         
     def loadData(self, k=2 ,file_path = None,debug = False):
         
-        os_name = sys_chk()
-     
-        if os_name == 'Windows': 
-            self.tag_name = "tag.txt"
-        elif os_name == 'Linux':
-            self.tag_name = "tag2.txt"
-        else:
-            self.tag_name = "tag.txt"
+        self.tag_name = "tag.txt"
+       
        
        
         self.debug = debug
@@ -133,8 +128,8 @@ class recognition(object):
             file_path = './input/**/'
         else:
             file_path = file_path + "**/"
-            
         file_paths = glob(file_path)
+        print(file_paths)
         self.mfccs= {}
         self.labels= {}
         self._idx = 0
@@ -161,14 +156,14 @@ class recognition(object):
             print(imin%self.k,"is selected")
         return self.labels[imin]
         
-    def _getMfcc(self,wav,sr):
+    def getMfcc(self,wav,sr):
         mfcc = librosa.feature.mfcc(wav, sr, n_mfcc=13)
         mfcc = mfcc.T
         return mfcc
     
 class validation(recognition):
-    def __init__(self, train_path, test_path, debug = False):
-        self.loadData(file_path = train_path)
+    def __init__(self, train_path, test_path, k = 2, debug = False):
+        self.loadData(file_path = train_path,k=k,debug = debug)
         self.test_paths = glob(test_path+"**/")
         self.debug = debug
 
@@ -178,28 +173,33 @@ class validation(recognition):
         total = 0
 
         for test_path in self.test_paths:
-            f = open(test_path + self.tag_name, 'r')
-            label = f.readline()
+            #f = open(test_path + self.tag_name, 'r')
+            with open('sounds/tag.txt', encoding="utf-8") as f:
+                label = f.readline().replace('\n','')
             f.close()
             
             wav_paths = glob(test_path+"*.wav")
             for wav_path in wav_paths:
+                print(wav_path)
                 wav, sr = librosa.core.load(wav_path)
-                x = self._getMfcc(wav,sr)
+                x = self.getMfcc(wav,sr)
                 xlabel = self.recognition(x)
                 if xlabel == label:
                     score += 1
                 total += 1
                 if self.debug:
-                    print("ans:",label[:-1], "guess:",xlabel[:-1])
+                    print("ans:",label, "guess:",xlabel)
                     print(score, total) 
         return score/total
 
+
 if __name__ == '__main__':
-    
-    train_path = "./input/"
+    from time import time
+    train_path = "./input2/"
     test_path = "./test/"
-    v1 = validation(train_path, test_path, debug = True)
+    tic = time()
+    v1 = validation(train_path, test_path, k=2, debug = True)
     ret = v1.valid()
-    print(ret*100,"%")
-    
+    toc = time()
+    print("recognition:",ret*100,"%")
+    print("time:",toc-tic)
